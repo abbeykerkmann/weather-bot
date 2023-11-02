@@ -42,7 +42,6 @@ async def getTodaysWeather(ctx, *location):
 
 @bot.command(name='now')
 async def getCurrentWeather(ctx, *location):
-    print(location)
     currentDate = date.today().strftime('%Y-%m-%d')
     currentHour = datetime.now().strftime('%Y-%m-%d %H:00:00')
     stationId = ""
@@ -108,12 +107,9 @@ def getConditionString(condition):
 def getStationId(location):
     stations = Stations().fetch()
     station = stations.loc[stations['name'] == location]
-    print(station)
-    print(station.empty)
     if station.empty:
         raise AssertionError("Invalid station name provided")
     else:
-        print(station.index.tolist())
         return station.index.tolist()[0]
 
 bot.run("TOKEN")
