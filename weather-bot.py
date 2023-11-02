@@ -14,31 +14,43 @@ conditions = {1: 'Clear', 2: 'Fair', 3: 'Cloudy', 4: 'Overcast', 5: 'Fog', 6: 'F
               24: 'Hail', 25: 'Thunderstorm', 26: 'Heavy Thunderstorm', 27: 'Storm'}
 
 intents = discord.Intents.default()
-intents.message_content = True
+intents.messages = True
 
 bot = commands.Bot(command_prefix='/', intents=intents)
 bot.remove_command('help')
 
 @bot.command(name='today')
-async def getTodaysWeather(ctx, location):
+async def getTodaysWeather(ctx, *location):
     currentDate = date.today().strftime('%Y-%m-%d')
-    stationId = getStationId(' '.join(location))
+    stationId = ""
+    try:
+        stationId = getStationId(' '.join(location))
+    except:
+        await ctx.send("Please provide a valid station name: `/today {station}`")
+        return
     weather = getDailyWeatherDataForDates(currentDate, currentDate, stationId)
     weatherData = weather['data'][0]
-    message = "Weather for Today's Date ({}):\n".format(weatherData['date'])
-    message += "Average Temperature: {}°C\n".format(weatherData['tavg'])
-    message += "Lowest Temperature: {}°C\n".format(weatherData['tmin'])
-    message += "Highest Temperature: {}°C\n".format(weatherData['tmax'])
-    message += "Rain: {}mm\n".format(0 if weatherData['prcp'] == None else weatherData['prcp'])
-    message += "Snowfall: {}mm\n".format(0 if weatherData['snow'] == None else weatherData['snow'])
-    message += "Sunshine Total: {} minutes".format(0 if weatherData['tsun'] == None else weatherData['tsun'])
+    message = "Today's Weather for {} ({}):\n".format(' '.join(location), weatherData['date'])
+    weatherDetails = "Average Temperature: {}°C\n".format(weatherData['tavg'])
+    weatherDetails += "Lowest Temperature: {}°C\n".format(weatherData['tmin'])
+    weatherDetails += "Highest Temperature: {}°C\n".format(weatherData['tmax'])
+    weatherDetails += "Rain: {}mm\n".format(0 if weatherData['prcp'] == None else weatherData['prcp'])
+    weatherDetails += "Snowfall: {}mm\n".format(0 if weatherData['snow'] == None else weatherData['snow'])
+    weatherDetails += "Sunshine Total: {} minutes".format(0 if weatherData['tsun'] == None else weatherData['tsun'])
+    message += "```{}```".format(weatherDetails)
     await ctx.send(message)
 
 @bot.command(name='now')
 async def getCurrentWeather(ctx, *location):
+    print(location)
     currentDate = date.today().strftime('%Y-%m-%d')
     currentHour = datetime.now().strftime('%Y-%m-%d %H:00:00')
-    stationId = getStationId(' '.join(location))
+    stationId = ""
+    try:
+        stationId = getStationId(' '.join(location))
+    except AssertionError:
+        await ctx.send("Please provide a valid station name: `/now {station}`")
+        return
     weather = getHourlyWeatherDataForDate(currentDate, stationId)
     weatherData = weather['data']
     currentWeatherData = None
@@ -46,22 +58,23 @@ async def getCurrentWeather(ctx, *location):
         if weatherData[index]['time'] == currentHour:
             currentWeatherData = weatherData[index]
             break
-    message = "Current Weather for Today's Date ({}):\n".format(currentWeatherData['time'])
-    message += "Condition: {}\n".format(getConditionString(currentWeatherData['coco']))
-    message += "Temperature: {}°C\n".format(currentWeatherData['temp'])
-    message += "Relative Humidity: {}%\n".format(currentWeatherData['rhum'])
-    message += "Rain: {}mm\n".format(0 if currentWeatherData['prcp'] == None else currentWeatherData['prcp'])
-    message += "Snowfall: {}mm\n".format(0 if currentWeatherData['snow'] == None else currentWeatherData['snow'])
-    message += "Sunshine Total: {} minutes".format(0 if currentWeatherData['tsun'] == None else currentWeatherData['tsun'])
+    message = "Current Weather for {} ({}):\n".format(' '.join(location), currentWeatherData['time'])
+    weatherDetails = "Condition: {}\n".format(getConditionString(currentWeatherData['coco']))
+    weatherDetails += "Temperature: {}°C\n".format(currentWeatherData['temp'])
+    weatherDetails += "Relative Humidity: {}%\n".format(currentWeatherData['rhum'])
+    weatherDetails += "Rain: {}mm\n".format(0 if currentWeatherData['prcp'] == None else currentWeatherData['prcp'])
+    weatherDetails += "Snowfall: {}mm\n".format(0 if currentWeatherData['snow'] == None else currentWeatherData['snow'])
+    weatherDetails += "Sunshine Total: {} minutes".format(0 if currentWeatherData['tsun'] == None else currentWeatherData['tsun'])
+    message += "```{}```".format(weatherDetails)
     await ctx.send(message)
 
 @bot.command(name='station')
 async def searchStation(ctx, *stationQuery):
     stations = Stations().fetch()
     stationQuery = ' '.join(stationQuery)
-    station = stations.loc[stations['name'].str.lower().contains(stationQuery.lower())]
-    message = "Found {} available stations:\n".format(len(station.index))
-    stationString = station.loc[:, ['name', 'country', 'region']].to_string()
+    selectedStations = stations[stations['name'].str.contains(stationQuery)]
+    message = "Found {} available stations:\n".format(len(selectedStations.index))
+    stationString = selectedStations.loc[:, ['name', 'country', 'region', 'timezone']].to_string()
     message += "```{}```".format(stationString)
     await ctx.send(message)
 
@@ -94,12 +107,14 @@ def getConditionString(condition):
 
 def getStationId(location):
     stations = Stations().fetch()
-    print(stations)
     station = stations.loc[stations['name'] == location]
-    if len(station.index) > 1:
-        station = station.iloc[0]
-    print(station['wmo'])
-    return station['wmo']
+    print(station)
+    print(station.empty)
+    if station.empty:
+        raise AssertionError("Invalid station name provided")
+    else:
+        print(station.index.tolist())
+        return station.index.tolist()[0]
 
 bot.run("TOKEN")
 
