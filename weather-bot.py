@@ -20,17 +20,20 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 bot.remove_command('help')
 
 @bot.command(name='today')
-async def getTodaysWeather(ctx, *location):
+async def getTodaysWeather(ctx, *station):
     currentDate = date.today().strftime('%Y-%m-%d')
+
     stationId = ""
     try:
-        stationId = getStationId(' '.join(location))
+        stationId = getStationId(' '.join(station))
     except:
-        await ctx.send("Please provide a valid station name: `/today {station}`")
+        await ctx.send("Please provide a valid station name: `/now {station}`.\nStation names can be searched using the `/station {location}` command.")
         return
+    
     weather = getDailyWeatherDataForDates(currentDate, currentDate, stationId)
     weatherData = weather['data'][0]
-    message = "Today's Weather for {} ({}):\n".format(' '.join(location), weatherData['date'])
+
+    message = "Today's Weather for {} ({}):\n".format(' '.join(station), weatherData['date'])
     weatherDetails = "Average Temperature: {}°C\n".format(weatherData['tavg'])
     weatherDetails += "Lowest Temperature: {}°C\n".format(weatherData['tmin'])
     weatherDetails += "Highest Temperature: {}°C\n".format(weatherData['tmax'])
@@ -38,18 +41,21 @@ async def getTodaysWeather(ctx, *location):
     weatherDetails += "Snowfall: {}mm\n".format(0 if weatherData['snow'] == None else weatherData['snow'])
     weatherDetails += "Sunshine Total: {} minutes".format(0 if weatherData['tsun'] == None else weatherData['tsun'])
     message += "```{}```".format(weatherDetails)
+
     await ctx.send(message)
 
 @bot.command(name='now')
-async def getCurrentWeather(ctx, *location):
+async def getCurrentWeather(ctx, *station):
     currentDate = date.today().strftime('%Y-%m-%d')
     currentHour = datetime.now().strftime('%Y-%m-%d %H:00:00')
+
     stationId = ""
     try:
-        stationId = getStationId(' '.join(location))
+        stationId = getStationId(' '.join(station))
     except AssertionError:
-        await ctx.send("Please provide a valid station name: `/now {station}`")
+        await ctx.send("Please provide a valid station name: `/now {station}`.\nStation names can be searched using the `/station {location}` command.")
         return
+    
     weather = getHourlyWeatherDataForDate(currentDate, stationId)
     weatherData = weather['data']
     currentWeatherData = None
@@ -57,7 +63,8 @@ async def getCurrentWeather(ctx, *location):
         if weatherData[index]['time'] == currentHour:
             currentWeatherData = weatherData[index]
             break
-    message = "Current Weather for {} ({}):\n".format(' '.join(location), currentWeatherData['time'])
+    
+    message = "Current Weather for {} ({}):\n".format(' '.join(station), currentWeatherData['time'])
     weatherDetails = "Condition: {}\n".format(getConditionString(currentWeatherData['coco']))
     weatherDetails += "Temperature: {}°C\n".format(currentWeatherData['temp'])
     weatherDetails += "Relative Humidity: {}%\n".format(currentWeatherData['rhum'])
@@ -65,23 +72,66 @@ async def getCurrentWeather(ctx, *location):
     weatherDetails += "Snowfall: {}mm\n".format(0 if currentWeatherData['snow'] == None else currentWeatherData['snow'])
     weatherDetails += "Sunshine Total: {} minutes".format(0 if currentWeatherData['tsun'] == None else currentWeatherData['tsun'])
     message += "```{}```".format(weatherDetails)
+
+    await ctx.send(message)
+
+@bot.command(name='hourly')
+async def getCurrentWeather(ctx, *station):
+    currentDate = datetime.now()
+    hoursList = [(currentDate + timedelta(hours=x)).strftime('%Y-%m-%d %H:00:00') for x in range(5)]
+
+    stationId = ""
+    try:
+        stationId = getStationId(' '.join(station))
+    except AssertionError:
+        await ctx.send("Please provide a valid station name: `/now {station}`.\nStation names can be searched using the `/station {location}` command.")
+        return
+    
+    weather = getHourlyWeatherDataForDate(currentDate.strftime('%Y-%m-%d'), stationId)
+    weatherData = weather['data']
+    hourlyWeatherData = []
+    for index in range(len(weatherData)):
+        if weatherData[index]['time'] in hoursList:
+            hourlyWeatherData.append(weatherData[index])
+    
+    message = "Hourly Weather for {} ({}):\n".format(' '.join(station), currentDate.strftime('%Y-%m-%d'))
+    for hour in hourlyWeatherData:
+        message += "Hour: {}\n".format(hour['time'][hour['time'].index(' ') + 1:])
+        weatherDetails = "Condition: {}\n".format(getConditionString(hour['coco']))
+        weatherDetails += "Temperature: {}°C\n".format(hour['temp'])
+        weatherDetails += "Relative Humidity: {}%\n".format(hour['rhum'])
+        weatherDetails += "Rain: {}mm\n".format(0 if hour['prcp'] == None else hour['prcp'])
+        weatherDetails += "Snowfall: {}mm\n".format(0 if hour['snow'] == None else hour['snow'])
+        weatherDetails += "Sunshine Total: {} minutes".format(0 if hour['tsun'] == None else hour['tsun'])
+        message += "```{}```".format(weatherDetails)
+
     await ctx.send(message)
 
 @bot.command(name='station')
 async def searchStation(ctx, *stationQuery):
     stations = Stations().fetch()
     stationQuery = ' '.join(stationQuery)
+
     selectedStations = stations[stations['name'].str.contains(stationQuery)]
+
     message = "Found {} available stations:\n".format(len(selectedStations.index))
     stationString = selectedStations.loc[:, ['name', 'country', 'region', 'timezone']].to_string()
     message += "```{}```".format(stationString)
+
     await ctx.send(message)
 
+# WIP: Weather for the upcoming week
 # @bot.command(name='week')
-# async def getWeekWeather(ctx):
+# async def getWeekWeather(ctx, *location):
 #     currentDate = date.today().strftime('%Y-%m-%d')
 #     endDate = currentDate + timedelta(days=7)
-#     getWeatherDataForDate
+#     stationId = ""
+#     try:
+#         stationId = getStationId(' '.join(location))
+#     except:
+#         await ctx.send("Please provide a valid station name: `/now {station}`.\nStation names can be searched using the `/station {location}` command.")
+#         return
+#     weather = getDailyWeatherDataForDates(currentDate, endDate, stationId)
 
 def getDailyWeatherDataForDates(startDate, endDate, stationId):
     querystring = {"station": stationId, "start": startDate, "end": endDate, "tz": timezone}
